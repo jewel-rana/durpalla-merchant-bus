@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+:root {
+  /* Overridden at runtime from lib/merchant.ts (see app/layout.tsx) */
+  --brand: #0b3d91;
+  --brand-dark: #082c6b;
+  --brand-light: #e8effb;
+  --accent: #f97316;
+  --accent-dark: #ea580c;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-light: var(--brand-light);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: #f4f7fc;
+  color: #0f172a;
+}
+
+@layer base {
+  *, ::before, ::after { border-color: var(--color-slate-200); }
+}
+
+@layer components {
+.btn-accent {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-2.5 font-semibold text-white shadow-sm transition hover:bg-accent-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-outline {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg border border-brand px-4 py-2 font-semibold text-brand transition hover:bg-brand-light;
+}
+.card {
+  @apply rounded-2xl border border-slate-200/70 bg-white shadow-[0_4px_20px_rgba(15,23,42,0.06)];
+}
+.field {
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-brand focus:ring-2 focus:ring-brand/20;
+}
+.label {
+  @apply mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500;
+}
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}
