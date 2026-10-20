@@ -1,0 +1,14 @@
+---
+description: Next.js App Router + TypeScript + Tailwind conventions
+globs: **/*.ts,**/*.tsx,**/*.css
+alwaysApply: false
+---
+
+# Next.js
+
+- This Next.js version differs from training data: check `node_modules/next/dist/docs/` (see AGENTS.md) before using an unfamiliar API — read only the relevant guide.
+- App Router; Server Components by default. Add `"use client"` only for interactivity (forms, seat/room pickers).
+- All data via `lib/api.ts` (mock fallback in `lib/mock.ts`); merchant/tenant branding via `lib/merchant.ts`. No fetches in components outside these.
+- Types in `lib/types.ts`. Tailwind utilities + shared `components/ui.tsx`; brand colors from CSS vars in `app/globals.css`.
+- Responsive, mobile-first. Bangla/English text; Bangla digits for display, ASCII to the API.
+- Verify with `npm run lint` (and `npx tsc --noEmit`) rather than a full `next build`.

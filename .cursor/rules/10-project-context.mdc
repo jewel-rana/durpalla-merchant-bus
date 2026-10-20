@@ -1,0 +1,21 @@
+---
+description: Architecture map, commands and conventions
+globs:
+alwaysApply: true
+---
+
+# Project context — merchant bus website (Next.js)
+
+## Map
+- `app/` App Router pages: home, search/, trip/[id]/seats/ checkout/, booking/[id]/confirmation, login/, account/ (bookings, invoices, profile); `app/layout.tsx`, `app/globals.css`.
+- `components/` UI (`ui.tsx` primitives, Header/Footer, forms, results).
+- `lib/api.ts` API client (Durpalla storefront API `api/v1/merchant/storefront/{tenant}/…`), `lib/merchant.ts` tenant/branding, `lib/mock.ts` mock data, `lib/types.ts`.
+- `proxy.ts` request proxy (tenant/domain resolution). Config: `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `.env*` (never commit).
+
+## Commands
+- Dev: `npm run dev` · Lint: `npm run lint` · Types: `npx tsc --noEmit` · Build: `npm run build` (only when needed)
+
+## Conventions
+- Brand primary #0B3D91 (blue) via CSS vars in `globals.css`; per-tenant overrides from `lib/merchant.ts`.
+- Bangla/English text; Bangla digits for display, ASCII for the API.
+- Multi-tenant: never hard-code a merchant; always go through `lib/merchant.ts`.
