@@ -1,7 +1,7 @@
 /** Bus endpoints: `{tenant}/bus/...` (cities, search, trips/{id}, seats, points). */
 import { sf } from "./storefront";
 import { pick } from "./storefront-shared";
-import type { City, Point, PopularRoute, SeatMap, SearchParams, Trip } from "./types";
+import type { City, Point, PopularRoute, SeatMap, SearchParams, TransportContent, Trip } from "./types";
 
 export const VERTICAL = "bus";
 const s = (v: unknown) => (v == null ? "" : String(v));
@@ -33,7 +33,9 @@ export function toTrip(t: Record<string, unknown>): Trip {
     coachNo: s(t.coachNo), coachClass: s(t.coachClass) || (t.isAc ? "AC" : "Non-AC"), isAc: Boolean(t.isAc),
     from: s(t.from), to: s(t.to), date: s(t.date), departure: hhmm(t.departure || dep), arrival: arr ? hhmm(arr) : "",
     duration: duration(dep, arr), fare: Number(t.fare) || 0, seatsLeft: Number(t.seatsLeft) || 0, totalSeats: Number(t.totalSeats) || 0,
-    image: s(t.image) || null,
+    image: s(t.image) || null, images: ((t.images as unknown[]) ?? []).map(s).filter(Boolean),
+    amenities: ((t.amenities as unknown[]) ?? []).map(s).filter(Boolean),
+    rating: t.rating && typeof t.rating === "object" ? { rating: Number(pick(t.rating, "rating")) || 0, count: Number(pick(t.rating, "count")) || 0 } : null,
     boardingPoints: ((t.boardingPoints as unknown[]) ?? []).map(toPoint),
     droppingPoints: ((t.droppingPoints as unknown[]) ?? []).map(toPoint),
   };
@@ -61,6 +63,7 @@ export async function getSeatMap(id: string): Promise<SeatMap> {
     row: (Number(x.row) || 0) - (Number.isFinite(minR) ? minR : 0), col: (Number(x.col) || 0) - (Number.isFinite(minC) ? minC : 0),
     status: (["available", "held", "booked", "blocked"].includes(s(x.status)) ? s(x.status) : "blocked") as SeatMap["seats"][number]["status"],
     fare: Number(x.fare) || 0, berth: s(x.type) === "cabin" || /sleep|berth|bed/i.test(s(x.className)), className: s(x.className) || undefined,
+    isLadies: Boolean(x.isLadies), isReserved: Boolean(x.isReserved),
   }));
   return {
     tripId: s(m.tripId) || id,
@@ -75,7 +78,18 @@ export async function getSeatMap(id: string): Promise<SeatMap> {
 /** `home.popularRoutes` for bus tenants. */
 export function popularRoutes(home: Record<string, unknown>): PopularRoute[] {
   return ((home.popularRoutes as Record<string, unknown>[]) ?? []).filter((r) => r.from && r.to).map((r) => ({
-    from: s(r.from), to: s(r.to), tripsPerDay: Number(r.tripsPerDay) || 0,
+    from: s(r.from), to: s(r.to), fromId: s(r.fromId) || undefined, toId: s(r.toId) || undefined, tripsPerDay: Number(r.tripsPerDay) || 0,
     fromFare: r.fromFare == null ? null : Number(r.fromFare), image: s(r.image) || null,
   }));
 }
+
+const EMPTY: TransportContent = { fleet: [], amenities: [], seatClasses: [], stats: { vehicles: 0, routes: 0, dailyTrips: 0, travellers: 0, rating: null, reviews: 0 }, reviews: [] };
+
+/** GET {tenant}/content → `bus` section (fleet, amenities, seat classes, stats, reviews). Empty when the API has none. */
+export async function getContent(): Promise<TransportContent> {
+  const c = await sf<Record<string, Partial<TransportContent>>>("content", { revalidate: 300 }).catch(() => ({} as Record<string, Partial<TransportContent>>));
+  const b = c[VERTICAL] ?? {};
+  return { ...EMPTY, ...b, stats: { ...EMPTY.stats, ...(b.stats ?? {}) } } as TransportContent;
+}
+
+export { amenityText } from "./amenities";

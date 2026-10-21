@@ -3,11 +3,18 @@ import { redirect } from "next/navigation";
 import { isAuthError, pick, sf } from "./storefront";
 import type { FeeLine } from "./auth-actions";
 
-export interface Customer { id: string; name: string; phone: string; email: string; avatar?: string }
+export type Gender = "male" | "female" | "other" | "";
+export interface Customer {
+  id: string; name: string; phone: string; email: string; avatar?: string;
+  gender: Gender; dob: string; address: string; city: string; nidNo: string; nidVerified: boolean;
+}
 
+const str = (v: unknown) => (v == null ? "" : String(v));
 export const toCustomer = (r: Record<string, unknown>): Customer => ({
-  id: String(r.id ?? ""), name: String(r.name ?? "") || "Traveller", phone: String(pick(r, "mobile", "phone") ?? ""),
-  email: String(r.email ?? ""), avatar: pick<string>(r, "avatar"),
+  id: str(r.id), name: str(r.name) || "Traveller", phone: str(pick(r, "mobile", "phone")),
+  email: str(r.email), avatar: pick<string>(r, "avatar"),
+  gender: (["male", "female", "other"].includes(str(r.gender)) ? str(r.gender) : "") as Gender,
+  dob: str(r.dob), address: str(r.address), city: str(r.city), nidNo: str(r.nidNo), nidVerified: Boolean(r.nidVerified),
 });
 
 /** GET {tenant}/me, or redirect to /login when there is no valid token for this tenant. */
@@ -31,8 +38,16 @@ export async function authed<T>(fn: () => Promise<T>, next: string): Promise<T> 
 }
 
 export type BookingStatus = "upcoming" | "completed" | "cancelled";
-export interface BookingSummary { id: string; pnr: string; vertical: string; status: string; travelDate?: string | null; total: number; createdAt?: string | null }
+export interface RouteSummary { tripId?: string | null; name?: string | null; from?: string | null; to?: string | null; date?: string | null; departureAt?: string | null; vehicleName?: string | null; seats: string[]; seatCount: number }
+export interface RoomSummary { hotelId: string; hotelName?: string | null; roomTypeId: string; roomName?: string | null; checkIn?: string | null; checkOut?: string | null; nights?: number | null; rooms: number; adults: number; children: number }
+export interface BookingSummary {
+  id: string; pnr: string; vertical: string; status: string; travelDate?: string | null; total: number; createdAt?: string | null;
+  route?: RouteSummary | null; room?: RoomSummary | null;
+}
+export interface BookingPassenger { name?: string | null; mobile?: string | null; gender?: string | null; age?: number | null; seat?: string | null }
+export interface BookingSeat { id: string; bookingItemId: string; label?: string | null; type?: string | null; className?: string | null; fare: number; status?: string | null }
 export interface BookingDetail extends BookingSummary {
+  passengers?: BookingPassenger[]; seats?: BookingSeat[]; canReview?: boolean; loyaltyPoints?: number;
   details: Record<string, unknown>;
   price: { subtotal: number; serviceCharge: number; vat: number; discount: number; baseTotal: number; gatewayFee: number; total: number; lines: FeeLine[] };
   payment: { mode?: string; gatewayFeeBearer?: string; gatewayFeePercent?: number; baseAmount?: number; gatewayFee?: number; payable?: number; status?: string; gateway?: string };
@@ -52,6 +67,11 @@ export async function getInvoice(id: string) {
 export interface CancellationQuote { cancellable: boolean; policyLines?: unknown[]; refundPreview?: { refundable?: number; gatewayFee?: number; gatewayFeeRefundable?: boolean } }
 export async function getCancellation(id: string) {
   return sf<CancellationQuote>(`bookings/${encodeURIComponent(id)}/cancellation`, { auth: true });
+}
+export interface Loyalty { enabled: boolean; balance: number; tier: string; takaPerPoint: number; history: { id: string; type: string; points: number; bookingId?: string | null; description?: string | null; createdAt?: string | null }[] }
+/** GET {tenant}/me/loyalty — points with this merchant only. */
+export async function getLoyalty() {
+  return sf<Loyalty>("me/loyalty", { auth: true });
 }
 export async function getPaymentStatus(id: string) {
   return sf<{ status: string; paid: boolean; amount?: number; transactionId?: string; gateway?: string }>(`payments/${encodeURIComponent(id)}/status`, { auth: true });

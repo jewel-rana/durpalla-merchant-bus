@@ -13,6 +13,7 @@ const legend = [
   { k: "booked", l: "Booked", c: "bg-slate-300 border-slate-300" },
   { k: "held", l: "On hold", c: "bg-amber-100 border-amber-300" },
   { k: "blocked", l: "Blocked", c: "bg-slate-700 border-slate-700" },
+  { k: "ladies", l: "Ladies seat", c: "bg-pink-50 border-pink-400" },
 ];
 
 export function SeatSelector({ trip, map, maxSeats }: { trip: Trip; map: SeatMap; maxSeats: number }) {
@@ -95,10 +96,11 @@ export function SeatSelector({ trip, map, maxSeats }: { trip: Trip; map: SeatMap
                   const s = seats.find((x) => x.row === r && x.col === c);
                   if (!s) return <span key={`${r}-${c}`} aria-hidden className="w-4 sm:w-6" />;
                   const isSel = selected.includes(s.id);
-                  const cls = isSel ? "bg-accent border-accent text-white" : s.status === "booked" ? "bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed" : s.status === "blocked" ? "bg-slate-700 border-slate-700 text-slate-300 cursor-not-allowed" : s.status === "held" ? "bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed" : "bg-white border-slate-300 text-slate-700 hover:border-brand hover:bg-brand-light";
+                  const cls = isSel ? "bg-accent border-accent text-white" : s.status === "booked" ? "bg-slate-300 border-slate-300 text-slate-500 cursor-not-allowed" : s.status === "blocked" ? "bg-slate-700 border-slate-700 text-slate-300 cursor-not-allowed" : s.status === "held" ? "bg-amber-100 border-amber-300 text-amber-700 cursor-not-allowed" : s.isLadies ? "bg-pink-50 border-pink-400 text-pink-700 hover:bg-pink-100" : "bg-white border-slate-300 text-slate-700 hover:border-brand hover:bg-brand-light";
                   return (
                     <button key={s.id} type="button" onClick={() => toggle(s)} disabled={unavailable(s) && !isSel}
-                      aria-pressed={isSel} aria-label={`Seat ${s.label}, ${isSel ? "selected" : s.status}, ${taka(s.fare)}`}
+                      aria-pressed={isSel} aria-label={`Seat ${s.label}${s.isLadies ? ", ladies seat" : ""}${s.isReserved ? ", reserved" : ""}, ${isSel ? "selected" : s.status}, ${taka(s.fare)}`}
+                      title={s.isLadies ? "Ladies seat" : s.isReserved ? "Reserved" : undefined}
                       className={`grid place-items-center rounded-lg border-2 text-xs font-bold transition ${cls} ${s.berth ? "h-20 w-14 sm:w-16" : "h-10 w-10 sm:h-11 sm:w-11"}`}>
                       {s.label}
                     </button>

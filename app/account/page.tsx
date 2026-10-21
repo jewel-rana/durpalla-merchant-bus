@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireMe } from "@/lib/account";
+import { getLoyalty, requireMe } from "@/lib/account";
 import { taka } from "@/lib/merchant";
 import { copy } from "@/lib/copy";
 import { loadBookings } from "@/lib/loadBookings";
@@ -10,18 +10,21 @@ import { QrPlaceholder, fmtDate } from "@/components/ui";
 export const metadata: Metadata = { title: "My account" };
 
 export default async function Dashboard() {
-  const [me, upcoming, completed] = await Promise.all([requireMe("/account"), loadBookings("upcoming", 5), loadBookings("completed", 0)]);
+  const [me, upcoming, completed, loyalty] = await Promise.all([
+    requireMe("/account"), loadBookings("upcoming", 5), loadBookings("completed", 0), getLoyalty().catch(() => null),
+  ]);
   const next = upcoming[0];
   const spent = [...upcoming, ...completed].reduce((s, b) => s + b.total, 0);
   const stats = [
     { l: `Upcoming ${copy.trips}`, v: upcoming.length },
     { l: `Completed ${copy.trips}`, v: completed.length },
     { l: "Total spent", v: taka(spent) },
+    ...(loyalty?.enabled ? [{ l: `Loyalty points · ${loyalty.tier}`, v: loyalty.balance.toLocaleString("en-IN") }] : []),
   ];
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold">Hello, {me.name.split(" ")[0]} 👋</h1><p className="text-slate-500">Here&apos;s an overview of your {copy.trips}.</p></div>
-      <dl className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+      <dl className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {stats.map((s) => <div key={s.l} className="card p-4"><dt className="text-xs text-slate-500">{s.l}</dt><dd className="mt-1 text-2xl font-extrabold text-brand">{s.v}</dd></div>)}
       </dl>
       {next && (
