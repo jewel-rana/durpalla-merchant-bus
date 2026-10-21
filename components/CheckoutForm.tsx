@@ -1,10 +1,11 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Passenger, Trip } from "@/lib/types";
 import { customerPaysFee, taka } from "@/lib/merchant";
 import { useSite } from "@/lib/site-context";
-import { createBusBooking } from "@/lib/bus-actions";
+import { createBusBooking, quoteTrip } from "@/lib/bus-actions";
+import type { TripQuote } from "@/lib/types";
 import { initiatePayment } from "@/lib/auth-actions";
 
 const brand: Record<string, string> = { bkash: "text-[#E2136E]", nagad: "text-[#EC1C24]", rocket: "text-[#8C3494]", sslcommerz: "text-[#1A1F71]", card: "text-[#1A1F71]" };
@@ -29,10 +30,22 @@ export function CheckoutForm({ trip, seats, boardId, dropId, phone: initialPhone
   const [err, setErr] = useState("");
   const board = trip.boardingPoints.find((p) => p.id === boardId) ?? trip.boardingPoints[0];
   const drop = trip.droppingPoints.find((p) => p.id === dropId) ?? trip.droppingPoints[0];
-  const fare = seats.reduce((s, x) => s + (x.fare || trip.fare), 0);
+  const [quote, setQuote] = useState<TripQuote | null>(null);
+  const [promoMsg, setPromoMsg] = useState("");
+  // Estimate until the API quote (POST bus/trips/{id}/quote) arrives; the quote is what the booking will charge.
+  const localFare = seats.reduce((s, x) => s + (x.fare || trip.fare), 0);
   const feePct = customerPaysFee(site) ? site.payments.gatewayFeePercent : 0;
-  const fee = Math.round(fare * feePct) / 100;
-  const total = fare + fee;
+  const fare = quote?.breakdown.fare ?? localFare;
+  const fee = quote ? quote.breakdown.gatewayFee : Math.round(localFare * feePct) / 100;
+  const total = quote?.breakdown.total ?? localFare + fee;
+  const seatKey = seats.map((s) => s.id).join(",");
+
+  const loadQuote = useCallback((code?: string) => quoteTrip(trip.id, seatKey.split(",").filter(Boolean), code).then((r) => {
+    if (!r.ok) return setPromoMsg(code ? r.message : "");
+    setQuote(r.data);
+    setPromoMsg(code ? (r.data.promo?.valid ? `✓ ${r.data.promo.code} applied` : r.data.promo?.message || "Invalid promo code") : "");
+  }), [trip.id, seatKey]);
+  useEffect(() => { void loadQuote(); }, [loadQuote]);
 
   const upd = (i: number, p: Partial<Passenger>) => setPax(pax.map((x, k) => (k === i ? { ...x, ...p } : x)));
 
@@ -90,7 +103,11 @@ export function CheckoutForm({ trip, seats, boardId, dropId, phone: initialPhone
             {!methods.length && <p className="text-sm text-slate-500">Online payment: coming soon for this merchant.</p>}
           </div>
           <p className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">🔒 Secure payment{site.payments.mode === "durpalla" ? <> powered by <b>Durpalla Limited</b></> : null}</p>
-          <div className="mt-4"><label className="label" htmlFor="promo">Promo code (optional)</label><input id="promo" className="field uppercase" value={promo} onChange={(e) => setPromo(e.target.value)} /></div>
+          <div className="mt-4"><label className="label" htmlFor="promo">Promo code (optional)</label>
+            <div className="flex gap-2"><input id="promo" className="field uppercase" value={promo} onChange={(e) => setPromo(e.target.value)} />
+              <button type="button" className="btn-outline !px-4" onClick={() => loadQuote(promo.trim() || undefined)}>Apply</button></div>
+            {promoMsg && <p role="status" className={`mt-1 text-xs ${quote?.promo?.valid ? "text-emerald-700" : "text-red-600"}`}>{promoMsg}</p>}
+          </div>
         </fieldset>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 accent-[var(--brand)]" /> I agree to the terms, cancellation and refund policy.</label>
         {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
@@ -108,7 +125,11 @@ export function CheckoutForm({ trip, seats, boardId, dropId, phone: initialPhone
           </dl>
           <dl className="mt-4 space-y-2 border-t pt-3 text-sm">
             <div className="flex justify-between"><dt>Fare ({seats.length} seat{seats.length > 1 ? "s" : ""})</dt><dd>{taka(fare)}</dd></div>
-            {feePct > 0 && <div className="flex justify-between"><dt>Payment gateway charge ({feePct}%)</dt><dd>{taka(fee)}</dd></div>}
+            {!!quote?.breakdown.serviceCharge && <div className="flex justify-between"><dt>Service charge</dt><dd>{taka(quote.breakdown.serviceCharge)}</dd></div>}
+            {!!quote?.breakdown.vat && <div className="flex justify-between"><dt>VAT</dt><dd>{taka(quote.breakdown.vat)}</dd></div>}
+            {!!quote?.breakdown.discount && <div className="flex justify-between text-emerald-700"><dt>Discount</dt><dd>−{taka(quote.breakdown.discount)}</dd></div>}
+            {quote ? quote.lines.map((l) => <div key={l.code} className="flex justify-between"><dt>{l.label}{l.percent ? ` (${l.percent}%)` : ""}</dt><dd>{taka(l.amount)}</dd></div>)
+              : feePct > 0 && <div className="flex justify-between"><dt>Payment gateway charge ({feePct}%)</dt><dd>{taka(fee)}</dd></div>}
             <div className="flex justify-between border-t pt-2 text-base font-bold"><dt>Total payable</dt><dd className="text-accent">{taka(total)}</dd></div>
           </dl>
           <button type="submit" className="btn-accent mt-4 hidden w-full lg:flex" disabled={busy}>{busy ? "Redirecting to gateway…" : `Pay ${taka(total)}`}</button>

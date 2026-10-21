@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Trip } from "@/lib/types";
 import { taka } from "@/lib/merchant";
+import { amenityText } from "@/lib/amenities";
 
 const slots = [
   { k: "morning", l: "Morning (6–12)", t: (h: number) => h >= 6 && h < 12 },
@@ -71,6 +72,8 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
                 <div className="md:w-52">
                   <p className="font-bold">{t.operator}</p>
                   <p className="text-xs text-slate-500">{[t.vehicleName, t.coachNo, t.coachClass].filter(Boolean).join(" · ")}</p>
+                  {t.rating && t.rating.count > 0 && <p className="mt-1 text-xs font-semibold text-amber-600">★ {t.rating.rating} <span className="font-normal text-slate-500">({t.rating.count})</span></p>}
+                  {t.amenities.length > 0 && <p className="mt-1 text-[11px] text-slate-500">{t.amenities.slice(0, 4).map(amenityText).join(" · ")}</p>}
                 </div>
                 <div className="flex flex-1 items-center justify-between gap-3 text-center">
                   <div><p className="text-xl font-extrabold whitespace-nowrap">{t.departure}</p><p className="text-xs text-slate-500">{t.from}</p></div>

@@ -10,6 +10,7 @@ import { QrPlaceholder, StatusBadge, fmtDate } from "@/components/ui";
 import { PriceLines } from "@/components/PriceLines";
 import { CancelButton } from "@/components/CancelButton";
 import { PayButton } from "@/components/PayButton";
+import { ReviewForm } from "@/components/ReviewForm";
 
 export const metadata: Metadata = { title: "Booking details" };
 
@@ -46,6 +47,13 @@ export default async function BookingDetails({ params }: { params: Promise<{ id:
               {b.people.map((p, i) => <li key={i} className="flex justify-between p-3"><span>{p.name} {p.meta && <span className="text-slate-500">· {p.meta}</span>}</span>{p.unit && <b>{copy.unit} {p.unit}</b>}</li>)}
             </ul>
           </>)}
+          {raw.seats && raw.seats.length > 0 && (<>
+            <h2 className="mb-2 mt-6 font-bold">{copy.unitsCol}</h2>
+            <ul className="divide-y rounded-xl border text-sm">
+              {raw.seats.map((x) => <li key={x.bookingItemId} className="flex justify-between p-3"><span>{copy.unit} <b>{x.label ?? x.id}</b>{x.className && <span className="text-slate-500"> · {x.className}</span>}</span><span>{x.fare ? `৳${x.fare.toLocaleString("en-IN")}` : ""}</span></li>)}
+            </ul>
+          </>)}
+          {!!raw.loyaltyPoints && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">⭐ You earned <b>{raw.loyaltyPoints}</b> loyalty points with this booking.</p>}
         </section>
         <aside className="space-y-5">
           <div className="card p-5 text-center"><QrPlaceholder value={b.pnr} size={150} /><p className="mt-2 text-xs text-slate-500">Show this at {merchant.shortName} {copy.counter}</p></div>
@@ -54,6 +62,7 @@ export default async function BookingDetails({ params }: { params: Promise<{ id:
             <PriceLines b={b} paidLabel={paid ? "Paid" : "Payable"} />
             {!paid && b.status === "upcoming" && <div className="mt-4"><PayButton bookingId={b.id} /></div>}
           </div>
+          {b.canReview && <ReviewForm bookingId={b.id} hotelId={b.hotelId} />}
           <div className="flex flex-col gap-2">
             <Link href={`/account/invoices/${b.id}`} className="btn-outline">View invoice</Link>
             {cq?.cancellable && <CancelButton id={b.id} refundable={cq.refundPreview?.refundable} gatewayFee={cq.refundPreview?.gatewayFee} />}

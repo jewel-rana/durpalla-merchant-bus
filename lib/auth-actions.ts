@@ -39,8 +39,17 @@ export async function logout() {
 }
 
 /** PATCH {tenant}/me (name, email). */
-export async function updateProfile(p: Pick<Customer, "name" | "email">) {
-  return run(async () => toCustomer(await sf<Record<string, unknown>>("me", { method: "PATCH", auth: true, body: { name: p.name, email: p.email || null } })));
+export async function updateProfile(p: Pick<Customer, "name" | "email" | "gender" | "dob" | "address" | "city" | "nidNo">) {
+  return run(async () => toCustomer(await sf<Record<string, unknown>>("me", { method: "PATCH", auth: true, body: {
+    name: p.name, email: p.email || null, gender: p.gender || null, dob: p.dob || null,
+    address: p.address || null, city: p.city || null, nidNo: p.nidNo || null,
+  } })));
+}
+
+/** 🔒 Review: hotel stays → POST hotel/properties/{hotelId}/reviews; bus/launch → POST bookings/{id}/review. */
+export async function submitReview(input: { bookingId: string; hotelId?: string; rating: number; text: string }) {
+  const path = input.hotelId ? `hotel/properties/${encodeURIComponent(input.hotelId)}/reviews` : `bookings/${encodeURIComponent(input.bookingId)}/review`;
+  return run(() => sf<{ id: string; rating: number }>(path, { method: "POST", auth: true, body: { rating: input.rating, text: input.text } }));
 }
 
 export interface PaymentInit { bookingId: string; redirectUrl: string; amount?: number; price?: { lines?: FeeLine[]; payable?: number } }
