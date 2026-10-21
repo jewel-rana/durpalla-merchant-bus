@@ -1,30 +1,37 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import type { PaymentMethod, Passenger, Trip } from "@/lib/types";
-import { api } from "@/lib/api";
-import { taka } from "@/lib/merchant";
+import type { Passenger, Trip } from "@/lib/types";
+import { customerPaysFee, taka } from "@/lib/merchant";
+import { useSite } from "@/lib/site-context";
+import { createBusBooking } from "@/lib/bus-actions";
+import { initiatePayment } from "@/lib/auth-actions";
 
-const methods: { k: PaymentMethod; l: string; c: string }[] = [
-  { k: "bkash", l: "bKash", c: "text-[#E2136E]" },
-  { k: "nagad", l: "Nagad", c: "text-[#EC1C24]" },
-  { k: "rocket", l: "Rocket", c: "text-[#8C3494]" },
-  { k: "card", l: "Card (VISA / Mastercard / AMEX)", c: "text-[#1A1F71]" },
-];
+const brand: Record<string, string> = { bkash: "text-[#E2136E]", nagad: "text-[#EC1C24]", rocket: "text-[#8C3494]", sslcommerz: "text-[#1A1F71]", card: "text-[#1A1F71]" };
 
-export function CheckoutForm({ trip, seats, boardId, dropId }: { trip: Trip; seats: string[]; boardId: string; dropId: string }) {
+export interface CheckoutSeat { id: string; label: string; fare: number }
+
+/**
+ * 🔒 POST bookings (vertical bus) → POST payments/initiate → gateway redirect.
+ * Methods and the gateway-fee rule come from GET config (`payments`); the final amount is the API's.
+ */
+export function CheckoutForm({ trip, seats, boardId, dropId, phone: initialPhone }: { trip: Trip; seats: CheckoutSeat[]; boardId: string; dropId: string; phone?: string }) {
+  const site = useSite();
   const router = useRouter();
-  const [pax, setPax] = useState<Passenger[]>(seats.map((s) => ({ seat: s, name: "", gender: "male", age: 30 })));
-  const [phone, setPhone] = useState("");
+  const methods = site.payments.methods;
+  const [pax, setPax] = useState<Passenger[]>(seats.map((s) => ({ seat: s.id, seatLabel: s.label, name: "", gender: "male", age: 30 })));
+  const [phone, setPhone] = useState((initialPhone ?? "").replace(/^\+?88/, ""));
   const [email, setEmail] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("bkash");
+  const [promo, setPromo] = useState("");
+  const [method, setMethod] = useState(methods[0]?.code ?? "");
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const board = trip.boardingPoints.find((p) => p.id === boardId) ?? trip.boardingPoints[0];
   const drop = trip.droppingPoints.find((p) => p.id === dropId) ?? trip.droppingPoints[0];
-  const fare = trip.fare * seats.length;
-  const fee = 30 * seats.length;
+  const fare = seats.reduce((s, x) => s + (x.fare || trip.fare), 0);
+  const feePct = customerPaysFee(site) ? site.payments.gatewayFeePercent : 0;
+  const fee = Math.round(fare * feePct) / 100;
   const total = fare + fee;
 
   const upd = (i: number, p: Partial<Passenger>) => setPax(pax.map((x, k) => (k === i ? { ...x, ...p } : x)));
@@ -32,17 +39,19 @@ export function CheckoutForm({ trip, seats, boardId, dropId }: { trip: Trip; sea
   async function pay(e: React.FormEvent) {
     e.preventDefault();
     if (!/^01\d{9}$/.test(phone)) return setErr("Enter a valid 11-digit mobile number (01XXXXXXXXX).");
+    if (!method) return setErr("Online payment is not available for this merchant yet.");
     if (!agree) return setErr("Please accept the terms to continue.");
     setErr(""); setBusy(true);
-    try {
-      const b = await api.createBooking({ tripId: trip.id, seats, passengers: pax, contact: { phone, email }, boardingPointId: board.id, droppingPointId: drop.id, paymentMethod: method });
-      const p = await api.initiatePayment(b.id, method);
-      // Real gateways return an absolute URL (bKash/Nagad/SSLCommerz); the mock returns our confirmation page.
-      if (p.redirectUrl.startsWith("http")) window.location.href = p.redirectUrl;
-      else router.push(p.redirectUrl);
-    } catch {
-      setErr("Payment could not be started. Please try again."); setBusy(false);
-    }
+    const b = await createBusBooking({
+      tripId: trip.id, seatIds: seats.map((s) => s.id), boardingPoint: board?.id, promoCode: promo.trim() || undefined,
+      passengers: pax.map((p) => ({ name: p.name, mobile: phone, gender: p.gender, age: p.age })),
+    });
+    if (!b.ok) { setBusy(false); return setErr(b.code === "SEAT_UNAVAILABLE" ? "One of your seats was just taken. Please pick again." : b.message); }
+    const p = await initiatePayment(b.data.id, method);
+    if (p.ok && p.data.redirectUrl) { window.location.href = p.data.redirectUrl; return; }
+    setBusy(false);
+    if (!p.ok) setErr(`Booking ${b.data.pnr ?? b.data.id} was created but payment could not start: ${p.message}`);
+    router.push(`/account/bookings/${b.data.id}`);
   }
 
   return (
@@ -52,7 +61,7 @@ export function CheckoutForm({ trip, seats, boardId, dropId }: { trip: Trip; sea
         {pax.map((p, i) => (
           <fieldset key={p.seat} className="card p-5">
             <legend className="sr-only">Passenger {i + 1}</legend>
-            <p className="mb-3 font-semibold">Passenger {i + 1} <span className="ml-2 rounded-md bg-brand-light px-2 py-0.5 text-xs text-brand">Seat {p.seat}</span></p>
+            <p className="mb-3 font-semibold">Passenger {i + 1} <span className="ml-2 rounded-md bg-brand-light px-2 py-0.5 text-xs text-brand">Seat {p.seatLabel}</span></p>
             <div className="grid gap-3 sm:grid-cols-[2fr_1fr_1fr]">
               <div><label className="label" htmlFor={`n${i}`}>Full name</label><input id={`n${i}`} className="field" required value={p.name} onChange={(e) => upd(i, { name: e.target.value })} placeholder="As on NID" /></div>
               <div><label className="label" htmlFor={`g${i}`}>Gender</label>
@@ -73,13 +82,15 @@ export function CheckoutForm({ trip, seats, boardId, dropId }: { trip: Trip; sea
           <legend className="mb-3 px-1 font-semibold">Payment method</legend>
           <div className="grid gap-3 sm:grid-cols-2">
             {methods.map((m) => (
-              <label key={m.k} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3 ${method === m.k ? "border-accent bg-orange-50" : "border-slate-200"}`}>
-                <input type="radio" name="method" value={m.k} checked={method === m.k} onChange={() => setMethod(m.k)} className="accent-[var(--accent)]" />
-                <span className={`font-extrabold ${m.c}`}>{m.l}</span>
+              <label key={m.code} className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-3 ${method === m.code ? "border-accent bg-orange-50" : "border-slate-200"}`}>
+                <input type="radio" name="method" value={m.code} checked={method === m.code} onChange={() => setMethod(m.code)} className="accent-[var(--accent)]" />
+                <span className={`font-extrabold ${brand[m.code] ?? "text-slate-800"}`}>{m.name}</span>
               </label>
             ))}
+            {!methods.length && <p className="text-sm text-slate-500">Online payment: coming soon for this merchant.</p>}
           </div>
-          <p className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">🔒 Secure payment powered by <b>Durpalla Limited</b></p>
+          <p className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">🔒 Secure payment{site.payments.mode === "durpalla" ? <> powered by <b>Durpalla Limited</b></> : null}</p>
+          <div className="mt-4"><label className="label" htmlFor="promo">Promo code (optional)</label><input id="promo" className="field uppercase" value={promo} onChange={(e) => setPromo(e.target.value)} /></div>
         </fieldset>
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-1 accent-[var(--brand)]" /> I agree to the terms, cancellation and refund policy.</label>
         {err && <p role="alert" className="text-sm text-red-600">{err}</p>}
@@ -89,15 +100,15 @@ export function CheckoutForm({ trip, seats, boardId, dropId }: { trip: Trip; sea
         <div className="card p-5">
           <h2 className="mb-3 font-bold">Trip summary</h2>
           <p className="font-semibold">{trip.from} → {trip.to}</p>
-          <p className="text-sm text-slate-500">{new Date(trip.date).toDateString()} · {trip.departure} · {trip.coachNo} ({trip.coachClass})</p>
+          <p className="text-sm text-slate-500">{new Date(trip.date).toDateString()} · {trip.departure} · {trip.coachNo}{trip.coachClass ? ` (${trip.coachClass})` : ""}</p>
           <dl className="mt-3 space-y-1 text-sm">
-            <div className="flex justify-between gap-3"><dt className="text-slate-500">Boarding</dt><dd className="text-right">{board.time} · {board.name}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-slate-500">Dropping</dt><dd className="text-right">{drop.time} · {drop.name}</dd></div>
-            <div className="flex justify-between"><dt className="text-slate-500">Seats</dt><dd>{seats.join(", ")}</dd></div>
+            {board && <div className="flex justify-between gap-3"><dt className="text-slate-500">Boarding</dt><dd className="text-right">{[board.time, board.name].filter(Boolean).join(" · ")}</dd></div>}
+            {drop && <div className="flex justify-between gap-3"><dt className="text-slate-500">Dropping</dt><dd className="text-right">{[drop.time, drop.name].filter(Boolean).join(" · ")}</dd></div>}
+            <div className="flex justify-between"><dt className="text-slate-500">Seats</dt><dd>{seats.map((s) => s.label).join(", ")}</dd></div>
           </dl>
           <dl className="mt-4 space-y-2 border-t pt-3 text-sm">
-            <div className="flex justify-between"><dt>Fare ({seats.length} × {taka(trip.fare)})</dt><dd>{taka(fare)}</dd></div>
-            <div className="flex justify-between"><dt>Service fee</dt><dd>{taka(fee)}</dd></div>
+            <div className="flex justify-between"><dt>Fare ({seats.length} seat{seats.length > 1 ? "s" : ""})</dt><dd>{taka(fare)}</dd></div>
+            {feePct > 0 && <div className="flex justify-between"><dt>Payment gateway charge ({feePct}%)</dt><dd>{taka(fee)}</dd></div>}
             <div className="flex justify-between border-t pt-2 text-base font-bold"><dt>Total payable</dt><dd className="text-accent">{taka(total)}</dd></div>
           </dl>
           <button type="submit" className="btn-accent mt-4 hidden w-full lg:flex" disabled={busy}>{busy ? "Redirecting to gateway…" : `Pay ${taka(total)}`}</button>

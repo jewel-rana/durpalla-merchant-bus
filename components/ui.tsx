@@ -1,4 +1,4 @@
-import type { BookingStatus } from "@/lib/types";
+import type { BookingStatus } from "@/lib/account";
 
 export function StatusBadge({ s }: { s: BookingStatus }) {
   const c = s === "upcoming" ? "bg-blue-50 text-blue-700" : s === "completed" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700";
@@ -32,4 +32,3 @@ export function QrPlaceholder({ value, size = 120 }: { value: string; size?: num
 }
 
 export const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-export const methodLabel: Record<string, string> = { bkash: "bKash", nagad: "Nagad", rocket: "Rocket", card: "Card" };
