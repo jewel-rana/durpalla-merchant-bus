@@ -3,17 +3,16 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Logo } from "./Logo";
-import { merchant } from "@/lib/merchant";
+import { useSite } from "@/lib/site-context";
 
 const nav = [
   { href: "/#routes", label: "Routes" },
   { href: "/search", label: "Schedules" },
-  { href: "/#fleet", label: "Fleet" },
-  { href: "/#classes", label: "Seat classes" },
-  { href: "/#app", label: "Get the app" },
+  { href: "/#offers", label: "Offers" },
 ];
 
 export function Header() {
+  const merchant = useSite();
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   useEffect(() => {
@@ -57,7 +56,7 @@ export function Header() {
               ))}
             </nav>
             <div className="mt-auto rounded-xl bg-brand-light p-4 text-sm">
-              <p className="font-semibold text-brand">Hotline {merchant.contact.hotline}</p>
+              {merchant.contact.hotline && <p className="font-semibold text-brand">Hotline {merchant.contact.hotline}</p>}
               <p className="text-slate-600">{merchant.contact.email}</p>
             </div>
           </div>

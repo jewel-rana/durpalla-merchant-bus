@@ -24,3 +24,19 @@ npm run build && npm start
 
 ## Routes
 `/` · `/search` · `/trip/[id]/seats` · `/checkout` · `/booking/[id]/confirmation` · `/login` · `/account` · `/account/bookings` · `/account/bookings/[id]` · `/account/invoices/[id]` (printable) · `/account/profile`
+
+## Storefront API (real data)
+
+All data comes from the Durpalla storefront API (`durpalla-apigw`, `docs/STOREFRONT_API.md`):
+`{API_BASE_URL}/api/v1/merchant/storefront/{tenant}/...`. There is no mock data.
+
+- **Tenant** = merchant username, resolved in `proxy.ts` from the host:
+  `{tenant}.durpalla.site` → subdomain; any other host (custom CNAME domain) → `GET /resolve?domain=`
+  (308 to the primary domain when the API says so); localhost → `NEXT_PUBLIC_TENANT`.
+- All API calls run server-side (`lib/storefront.ts`, server components and server actions), so there is no CORS setup and
+  the customer token lives in an httpOnly cookie (`dp_token`, per host = per tenant). Guests get a `dp_guest` id for seat holds.
+- Caching: config/home 300 s, search/availability 60 s, seats, quotes, holds and anything authenticated are never cached.
+- Payments: methods, mode (`own`/`durpalla`) and the customer-borne gateway charge come from `GET config`;
+  amounts shown after booking/quote are the API's (`price.lines` / `lines`). The gateway returns to `/payment/result`.
+
+Copy `.env.example` to `.env.local` and set `API_BASE_URL` and `NEXT_PUBLIC_TENANT`.

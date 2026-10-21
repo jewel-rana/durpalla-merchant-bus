@@ -9,12 +9,13 @@ const slots = [
   { k: "afternoon", l: "Afternoon (12–18)", t: (h: number) => h >= 12 && h < 18 },
   { k: "night", l: "Night (18–6)", t: (h: number) => h >= 18 || h < 6 },
 ];
-const classesList = ["Economy (Non-AC)", "Business (AC)", "Sleeper"];
 
 export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers: number }) {
+  const classesList = useMemo(() => [...new Set(trips.map((t) => t.coachClass).filter(Boolean))], [trips]);
+  const fareCap = useMemo(() => Math.max(500, Math.ceil(Math.max(0, ...trips.map((t) => t.fare)) / 100) * 100), [trips]);
   const [cls, setCls] = useState<string[]>([]);
   const [slot, setSlot] = useState<string[]>([]);
-  const [maxFare, setMaxFare] = useState(3000);
+  const [maxFare, setMaxFare] = useState(Number.POSITIVE_INFINITY);
   const [sort, setSort] = useState("departure");
   const [showFilters, setShowFilters] = useState(false);
   const toggle = (arr: string[], set: (v: string[]) => void, v: string) => set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
@@ -24,7 +25,7 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
       const h = Number(t.departure.slice(0, 2));
       return (!cls.length || cls.includes(t.coachClass)) && (!slot.length || slots.some((s) => slot.includes(s.k) && s.t(h))) && t.fare <= maxFare;
     });
-    return r.sort((a, b) => (sort === "fare" ? a.fare - b.fare : sort === "rating" ? b.rating - a.rating : a.departure.localeCompare(b.departure)));
+    return r.sort((a, b) => (sort === "fare" ? a.fare - b.fare : a.departure.localeCompare(b.departure)));
   }, [trips, cls, slot, maxFare, sort]);
 
   const filters = (
@@ -42,10 +43,10 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
         ))}
       </fieldset>
       <div>
-        <label htmlFor="fare" className="mb-2 block text-sm font-bold">Max fare: {taka(maxFare)}</label>
-        <input id="fare" type="range" min={500} max={3000} step={100} value={maxFare} onChange={(e) => setMaxFare(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
+        <label htmlFor="fare" className="mb-2 block text-sm font-bold">Max fare: {taka(Math.min(maxFare, fareCap))}</label>
+        <input id="fare" type="range" min={0} max={fareCap} step={50} value={Math.min(maxFare, fareCap)} onChange={(e) => setMaxFare(Number(e.target.value))} className="w-full accent-[var(--accent)]" />
       </div>
-      <button type="button" className="text-sm font-semibold text-brand underline" onClick={() => { setCls([]); setSlot([]); setMaxFare(3000); }}>Reset filters</button>
+      <button type="button" className="text-sm font-semibold text-brand underline" onClick={() => { setCls([]); setSlot([]); setMaxFare(Number.POSITIVE_INFINITY); }}>Reset filters</button>
     </div>
   );
 
@@ -59,7 +60,7 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
             <button type="button" className="btn-outline !py-1.5 text-sm lg:hidden" onClick={() => setShowFilters(true)}>Filters</button>
             <label className="sr-only" htmlFor="sort">Sort by</label>
             <select id="sort" className="field !w-auto !py-1.5" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="departure">Earliest departure</option><option value="fare">Lowest fare</option><option value="rating">Top rated</option>
+              <option value="departure">Earliest departure</option><option value="fare">Lowest fare</option>
             </select>
           </div>
         </div>
@@ -69,13 +70,12 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
               <div className="flex flex-col gap-4 md:flex-row md:items-center">
                 <div className="md:w-52">
                   <p className="font-bold">{t.operator}</p>
-                  <p className="text-xs text-slate-500">{t.coachNo} · {t.coachClass} · {t.layout}</p>
-                  <p className="mt-1 text-xs font-semibold text-emerald-600">★ {t.rating}</p>
+                  <p className="text-xs text-slate-500">{[t.vehicleName, t.coachNo, t.coachClass].filter(Boolean).join(" · ")}</p>
                 </div>
                 <div className="flex flex-1 items-center justify-between gap-3 text-center">
                   <div><p className="text-xl font-extrabold whitespace-nowrap">{t.departure}</p><p className="text-xs text-slate-500">{t.from}</p></div>
-                  <div className="flex-1 text-xs text-slate-500"><p>{t.duration}</p><div className="my-1 h-px bg-slate-300" /><p>Non-stop</p></div>
-                  <div><p className="text-xl font-extrabold whitespace-nowrap">{t.arrival}</p><p className="text-xs text-slate-500">{t.to}</p></div>
+                  <div className="flex-1 text-xs text-slate-500"><p>{t.duration || "\u00a0"}</p><div className="my-1 h-px bg-slate-300" /><p>Non-stop</p></div>
+                  <div><p className="text-xl font-extrabold whitespace-nowrap">{t.arrival || "—"}</p><p className="text-xs text-slate-500">{t.to}</p></div>
                 </div>
                 <div className="flex items-center justify-between gap-4 border-t pt-3 md:w-48 md:flex-col md:items-end md:border-0 md:pt-0">
                   <div className="md:text-right">
@@ -85,7 +85,7 @@ export function SearchResults({ trips, passengers }: { trips: Trip[]; passengers
                   <Link href={`/trip/${t.id}/seats?passengers=${passengers}`} className="btn-accent !py-2 text-sm">Select Seats</Link>
                 </div>
               </div>
-              <ul className="mt-3 flex flex-wrap gap-1.5 border-t pt-3">{t.amenities.map((a) => <li key={a} className="rounded-md bg-brand-light px-2 py-0.5 text-xs text-brand">{a}</li>)}</ul>
+              {t.boardingPoints.length > 0 && <p className="mt-3 border-t pt-3 text-xs text-slate-500">Boarding: {t.boardingPoints.map((p) => p.name).join(" · ")}</p>}
             </li>
           ))}
           {!list.length && <li className="card p-10 text-center text-slate-500">No buses match these filters.</li>}

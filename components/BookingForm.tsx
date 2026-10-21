@@ -1,16 +1,20 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { cities } from "@/lib/mock";
+import type { City } from "@/lib/types";
+
+const today = () => new Date().toISOString().slice(0, 10);
+const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
 export interface BookingFormValues { from: string; to: string; date: string; returnDate?: string; passengers: number }
 
-export function BookingForm({ initial, compact = false }: { initial?: Partial<BookingFormValues>; compact?: boolean }) {
+/** Cities come from GET bus/cities (merchant routes only). */
+export function BookingForm({ initial, compact = false, cities = [] }: { initial?: Partial<BookingFormValues>; compact?: boolean; cities?: City[] }) {
   const router = useRouter();
   const [round, setRound] = useState(Boolean(initial?.returnDate));
-  const [from, setFrom] = useState(initial?.from ?? "Dhaka");
-  const [to, setTo] = useState(initial?.to ?? "Cox's Bazar");
-  const [date, setDate] = useState(initial?.date ?? "2026-10-24");
+  const [from, setFrom] = useState(initial?.from ?? "");
+  const [to, setTo] = useState(initial?.to ?? "");
+  const [date, setDate] = useState(initial?.date || tomorrow());
   const [ret, setRet] = useState(initial?.returnDate ?? "");
   const [pax, setPax] = useState(initial?.passengers ?? 1);
   const [error, setError] = useState("");
@@ -53,7 +57,7 @@ export function BookingForm({ initial, compact = false }: { initial?: Partial<Bo
         <div className="grid grid-cols-2 gap-3 md:contents">
           <div>
             <label className="label" htmlFor="date">Journey date</label>
-            <input id="date" type="date" className="field" value={date} min="2026-10-20" onChange={(e) => setDate(e.target.value)} required />
+            <input id="date" type="date" className="field" value={date} min={today()} onChange={(e) => setDate(e.target.value)} required />
           </div>
           <div>
             <label className="label" htmlFor="ret">Return {round ? "" : "(optional)"}</label>
